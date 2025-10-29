@@ -6,6 +6,8 @@ import Account from "../model/account.js";
 import TutorProfile from "../model/tutor.js";
 import StudentProfile from "../model/students.js";
 import refreshtoken from "../model/refreshtoken.js";
+import verificationToken from "../model/verificationToken.js";
+import { sendVerificationEmail } from "../services/emailService.js";
 
 const { REFRESH_EXPIRES, COOKIE_DOMAIN, NODE_ENV } = process.env;
 
@@ -49,56 +51,61 @@ const authController = {
   },
 
   // ─────────────────────────────────────────────
- async signupMethod(req, res) {
-  try {
-    const { email, password, role } = req.body || {};
-    
-    // Validate input
-    if (!email || !password || !role) {
-      return res.status(400).json({ message: "Email, password and role are required" });
-    }
-    
-    if (!["TUTOR", "STUDENT"].includes(role)) {
-      return res.status(400).json({ message: "Role must be TUTOR or STUDENT" });
-    }
+async signupMethod(req, res) {
+    try {
+      const { email, password, role } = req.body || {};
+      
+      // Validate input
+      if (!email || !password || !role) {
+        return res.status(400).json({ message: "Email, password and role are required" });
+      }
+      
+      if (!["TUTOR", "STUDENT"].includes(role)) {
+        return res.status(400).json({ message: "Role must be TUTOR or STUDENT" });
+      }
 
-    // Check if email already exists
-    const exists = await Account.findOne({ email });
-    if (exists) {
-      return res.status(409).json({ message: "Email already exists" });
-    }
+      // Check if email already exists
+      const exists = await Account.findOne({ email });
+      if (exists) {
+        return res.status(409).json({ message: "Email already exists" });
+      }
 
-    // Hash password and create account
-    const hash = await bcrypt.hash(password, 12);
-    const user = await Account.create({ 
-      email: email.toLowerCase().trim(), 
-      password: hash, 
-      role 
-    });
-
-    // Create profile based on role
-    if (role === "TUTOR") {
-      await TutorProfile.create({ 
-        accountId: user._id, 
-        fullName: "", 
-        subjectSpecialty: [] 
+      // Hash password and create account
+      const hash = await bcrypt.hash(password, 12);
+      const user = await Account.create({ 
+        email: email.toLowerCase().trim(), 
+        password: hash, 
+        role,
+        isVerified: false 
       });
-    } else {
-      await StudentProfile.create({ 
-        accountId: user._id, 
-        fullName: "" 
-      });
-    }
 
-    return res.status(201).json({ 
-      message: "Account created successfully",
-      user: { id: user._id, email: user.email, role: user.role }
-    });
-  } catch (error) {
-    console.error("Signup error:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-},
+      // Tạo verification token - SỬA TÊN BIẾN
+      const tokenValue = randomId(); // ĐỔI TÊN BIẾN
+      await verificationToken.create({
+        userId: user._id,
+        token: tokenValue, // DÙNG BIẾN MỚI
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+      });
+
+      // Gửi verification email
+      await sendVerificationEmail(email, tokenValue, user._id);
+
+      // Tạo profile
+      if (role === "TUTOR") {
+        await TutorProfile.create({ accountId: user._id, fullName: "", subjectSpecialty: [] });
+      } else {
+        await StudentProfile.create({ accountId: user._id, fullName: "" });
+      }
+
+      return res.status(201).json({ 
+        message: "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.",
+        requiresVerification: true
+      });
+    } catch (error) {
+      console.error("Signup error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
 
   // ─────────────────────────────────────────────
   async loginMethod(req, res) {
@@ -108,7 +115,11 @@ const authController = {
 
     const user = await Account.findOne({ email, isActive: true });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
-
+ if (!user.isVerified) {
+      return res.status(403).json({ 
+        message: "Email chưa được xác thực. Vui lòng kiểm tra hộp thư." 
+      });
+    }
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
@@ -171,7 +182,8 @@ const authController = {
 
     return res.json({ accessToken });
   },
-
+  
+  
   // ─────────────────────────────────────────────
   async logoutMethod(req, res) {
     const token = req.cookies?.rt;
@@ -190,6 +202,96 @@ const authController = {
     return res.json({
       user: { id: req.user.sub, email: req.user.email, role: req.user.role }
     });
+  },
+    // ─────────────────────────────────────────────
+  async verifyEmail(req, res){
+    try {
+       const { token, userId } = req.body;
+
+    // Tìm verification token
+    const verification = await verificationToken.findOne({
+      token,
+      userId,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!verification) {
+      return res.status(400).json({ 
+        message: "Token không hợp lệ hoặc đã hết hạn" 
+      });
+    }
+
+    // Cập nhật account thành đã xác thực
+    await Account.findByIdAndUpdate(userId, { isVerified: true });
+    
+    // Xóa verification token đã dùng
+    await verificationToken.deleteOne({ _id: verification._id });
+
+    return res.json({ 
+      message: "Email đã được xác thực thành công!",
+      verified: true 
+    });
+    } catch (error) {
+       console.error("Verify email error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+  async resendVerification(req,res){
+    try {
+       const { email } = req.body;
+    
+    console.log("🔄 Resend verification requested for:", email);
+
+    if (!email) {
+      return res.status(400).json({ message: "Email là bắt buộc" });
+    }
+
+    // Tìm account bằng email
+    const account = await Account.findOne({ 
+      email: email.toLowerCase().trim() 
+    });
+
+    if (!account) {
+      // Trả về success ngay cả khi email không tồn tại (bảo mật)
+      console.log("📧 Email not found, but returning success for security");
+      return res.json({ 
+        message: "Nếu email tồn tại, chúng tôi đã gửi liên kết xác thực mới" 
+      });
+    }
+
+    // Kiểm tra nếu email đã được xác thực
+    if (account.isVerified) {
+      return res.status(400).json({ 
+        message: "Email này đã được xác thực" 
+      });
+    }
+
+    // Xóa verification token cũ (nếu có)
+    await verificationToken.deleteMany({ userId: account._id });
+
+    // Tạo verification token mới
+    const newToken = randomId();
+    await verificationToken.create({
+      userId: account._id,
+      token: newToken,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+    });
+
+    // Gửi email xác thực mới
+    await sendVerificationEmail(email, verificationToken, account._id);
+
+    console.log("✅ Resent verification email to:", email);
+
+    return res.json({ 
+      message: "Đã gửi email xác thực mới. Vui lòng kiểm tra hộp thư.",
+      email: email // Optional: để frontend confirm
+    });
+    } catch (error) {
+        console.error("❌ Resend verification error:", error);
+    return res.status(500).json({ 
+      message: "Lỗi hệ thống. Vui lòng thử lại sau." 
+    });
+    }
   }
 };
 

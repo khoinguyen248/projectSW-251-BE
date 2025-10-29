@@ -9,7 +9,7 @@ import Session from "../model/session.js";
 // GET /tutors
 export async function listTutors(req, res) {
   const tutors = await TutorProfile.find({})
-    .select("accountId fullName subjectSpecialty ratingAvg totalRatings bio")
+    .select("accountId fullName subjectSpecialty ratingAvg totalRatings hourlyRate bio")
     .lean();
   return res.json({ tutors });
 }
@@ -126,8 +126,7 @@ export async function scheduleSession(req, res) {
       });
     }
 
-    // Create session
-    console.log("✅ Creating session...");
+    console.log(" Creating session...");
     const session = await Session.create({
       studentId: req.user.sub,
       tutorId,
@@ -137,7 +136,7 @@ export async function scheduleSession(req, res) {
       status: "PENDING",
     });
 
-    console.log("✅ Session created successfully:", session._id);
+    console.log(" Session created successfully:", session._id);
     
     return res.status(201).json({ 
       sessionId: session._id,
@@ -145,7 +144,7 @@ export async function scheduleSession(req, res) {
     });
 
   } catch (error) {
-    console.error("❌ Schedule session error:", error);
+    console.error(" Schedule session error:", error);
     return res.status(500).json({ 
       message: "Internal server error",
       error: error.message 
@@ -177,7 +176,7 @@ export async function addFeedback(req, res) {
   const { sessionId, rating, comment } = req.body || {};
   if (!sessionId || !rating) return res.status(400).json({ message: "Missing fields" });
 
-  const s = await session.findById(sessionId);
+  const s = await Session.findById(sessionId);
   if (!s) return res.status(404).json({ message: "Session not found" });
   if (String(s.studentId) !== String(req.user.sub)) {
     return res.status(403).json({ message: "Forbidden" });

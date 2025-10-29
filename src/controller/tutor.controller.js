@@ -1,38 +1,109 @@
 // src/controller/tutor.controller.js
 
-import session from "../model/session";
+import Session from "../model/session.js";
+import TutorProfile from "../model/tutor.js";
 
 // GET /tutor/sessions/pending
+
 export async function listPending(req, res) {
-  const sessions = await session.find({
-    tutorId: req.user.sub,
-    status: "PENDING",
-  }).lean();
-  return res.json({ sessions });
+  try {
+    // Lấy _id của TutorProfile tương ứng với tài khoản đăng nhập
+    const tutor = await TutorProfile.findOne(
+      { accountId: req.user.sub },
+      { _id: 1 }
+    ).lean();
+
+    if (!tutor) {
+      return res.status(404).json({ message: "Tutor profile not found" });
+    }
+
+    // Tìm các session có tutorId trùng với _id của TutorProfile
+    const sessions = await Session.find({
+      tutorId: tutor._id,
+      status: "PENDING",
+    }).lean();
+
+    return res.json({ sessions });
+  } catch (err) {
+    console.error("Error in listPending:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
 }
+
 
 // PATCH /tutor/sessions/:id/confirm
 export async function confirmSession(req, res) {
-  const { id } = req.params;
-  const { action, meetingLink } = req.body || {}; // action = "ACCEPT" | "REJECT"
-  const s = await session.findById(id);
-  if (!s) return res.status(404).json({ message: "Session not found" });
-  if (String(s.tutorId) !== String(req.user.sub)) {
-    return res.status(403).json({ message: "Forbidden" });
-  }
-  if (s.status !== "PENDING") {
-    return res.status(409).json({ message: "Session already handled" });
-  }
+  try {
+    const { id } = req.params;
+    const { action, meetingLink } = req.body || {};
+    
+    console.log("🎯 confirmSession called:");
+    console.log("- Session ID:", id);
+    console.log("- Action:", action);
+    console.log("- User ID (account):", req.user.sub);
 
-  if (action === "ACCEPT") {
-    s.status = "ACCEPTED";
-    if (meetingLink) s.meetingLink = meetingLink;
-  } else if (action === "REJECT") {
-    s.status = "REJECTED";
-  } else {
-    return res.status(400).json({ message: "Invalid action" });
-  }
+    const session = await Session.findById(id);
+    if (!session) {
+      console.log(" Session not found:", id);
+      return res.status(404).json({ message: "Session not found" });
+    }
 
-  await s.save();
-  return res.json({ message: "Updated", status: s.status });
+    console.log("🔍 Session found:", {
+      id: session._id,
+      tutorId: session.tutorId,
+      status: session.status
+    });
+
+    const tutorProfile = await TutorProfile.findOne(
+      { accountId: req.user.sub },
+      { _id: 1 }
+    ).lean();
+
+    if (!tutorProfile) {
+      console.log("Tutor profile not found");
+      return res.status(404).json({ message: "Tutor profile not found" });
+    }
+
+    console.log("Tutor profile ID:", tutorProfile._id);
+
+    if (String(session.tutorId) !== String(tutorProfile._id)) {
+      console.log("Forbidden: Session tutorId doesn't match user's tutor profile");
+      console.log("- Session tutorId:", session.tutorId);
+      console.log("- User's tutorProfileId:", tutorProfile._id);
+      return res.status(403).json({ message: "Forbidden - Not your session" });
+    }
+
+    if (session.status !== "PENDING") {
+      console.log("Session already handled:", session.status);
+      return res.status(409).json({ message: "Session already handled" });
+    }
+
+    // Xử lý action
+    if (action === "ACCEPT") {
+      session.status = "ACCEPTED";
+      if (meetingLink) {
+        session.meetingLink = meetingLink;
+        console.log("Meeting link added:", meetingLink);
+      }
+      console.log("Session accepted");
+    } else if (action === "REJECT") {
+      session.status = "REJECTED";
+      console.log("Session rejected");
+    } else {
+      console.log("Invalid action:", action);
+      return res.status(400).json({ message: "Invalid action" });
+    }
+
+    await session.save();
+    console.log("💾 Session saved with new status:", session.status);
+    
+    return res.json({ 
+      message: "Session updated successfully", 
+      status: session.status 
+    });
+
+  } catch (error) {
+    console.error("❌ Error in confirmSession:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 }
