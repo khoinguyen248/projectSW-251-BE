@@ -10,6 +10,95 @@ import verificationToken from "../model/verificationToken.js";
 import { sendVerificationEmail } from "../services/emailService.js";
 
 const { REFRESH_EXPIRES, COOKIE_DOMAIN, NODE_ENV } = process.env;
+/**
+ * Kiểm tra tên đăng nhập (phần trước @)
+ * Yêu cầu:
+ * - Không được bỏ trống
+ * - Không được có các ký tự đặc biệt (chỉ chữ, số, dấu gạch ngang, dấu gạch chân)
+ * - Không được lặp lại ký tự liên tiếp quá 3 lần
+ * - Không chấp nhận dấu cách là 1 tên (phải có ít nhất 3 ký tự)
+ * - Tối đa 22 ký tự
+ */
+function validateUsername(email) {
+  if (!email || typeof email !== 'string') {
+    return { valid: false, error: "Tên đăng nhập không được bỏ trống" };
+  }
+
+  email = email.trim();
+  if (!email) {
+    return { valid: false, error: "Tên đăng nhập không được bỏ trống" };
+  }
+
+  const emailPart = email.split('@')[0];
+  
+  if (emailPart.length < 3) {
+    return { valid: false, error: "Tên đăng nhập phải có ít nhất 3 ký tự" };
+  }
+
+  if (emailPart.length > 22) {
+    return { valid: false, error: "Tên đăng nhập không được vượt quá 22 ký tự" };
+  }
+
+  const validUsernameRegex = /^[a-zA-Z0-9._-]+$/;
+  if (!validUsernameRegex.test(emailPart)) {
+    return { valid: false, error: "Tên đăng nhập chỉ được chứa chữ cái, số, dấu gạch ngang, dấu gạch chân và dấu chấm" };
+  }
+
+  const repeatingCharPattern = /(.)\1{3,}/;
+  if (repeatingCharPattern.test(emailPart)) {
+    return { valid: false, error: "Tên đăng nhập không được có ký tự lặp lại liên tiếp quá 3 lần" };
+  }
+
+  if (email.includes(' ')) {
+    return { valid: false, error: "Tên đăng nhập không được chứa dấu cách" };
+  }
+
+  return { valid: true, error: null };
+}
+
+/**
+ * Kiểm tra mật khẩu
+ * Yêu cầu:
+ * - Không được bỏ trống
+ * - Ít nhất 6 ký tự
+ * - Tối đa 32 ký tự
+ * - Không chấp nhận khoảng cách (dấu cách)
+ */
+function validatePassword(password) {
+  if (!password || typeof password !== 'string') {
+    return { valid: false, error: "Mật khẩu không được bỏ trống" };
+  }
+
+  if (password.length < 6) {
+    return { valid: false, error: "Mật khẩu phải có ít nhất 6 ký tự" };
+  }
+
+  if (password.length > 32) {
+    return { valid: false, error: "Mật khẩu không được vượt quá 32 ký tự" };
+  }
+
+  if (password.includes(' ')) {
+    return { valid: false, error: "Mật khẩu không được chứa khoảng cách" };
+  }
+
+  return { valid: true, error: null };
+}
+
+/**
+ * Kiểm tra email hợp lệ
+ */
+function validateEmail(email) {
+  if (!email || typeof email !== 'string') {
+    return { valid: false, error: "Email không được bỏ trống" };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return { valid: false, error: "Email không hợp lệ" };
+  }
+
+  return { valid: true, error: null };
+}
 
 function setRefreshCookie(res, token) {
   const maxAgeMs =
@@ -62,6 +151,24 @@ async signupMethod(req, res) {
       
       if (!["TUTOR", "STUDENT"].includes(role)) {
         return res.status(400).json({ message: "Role must be TUTOR or STUDENT" });
+      }
+
+      // ✅ Validate tên đăng nhập (email part)
+      const usernameValidation = validateUsername(email);
+      if (!usernameValidation.valid) {
+        return res.status(400).json({ message: usernameValidation.error });
+      }
+
+      // ✅ Validate email format
+      const emailValidation = validateEmail(email);
+      if (!emailValidation.valid) {
+        return res.status(400).json({ message: emailValidation.error });
+      }
+
+      // ✅ Validate mật khẩu
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ message: passwordValidation.error });
       }
 
       // Check if email already exists
