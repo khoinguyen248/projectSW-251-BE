@@ -5,6 +5,7 @@ import profileRouter from "./profile.routes.js";
 import studentRoutes from "./student.routes.js";
 import tutorRoutes from "./tutor.routes.js";
 import emailConfigRouter from "./emailConfig.routes.js";
+import matchingRouter from "./matching.routes.js";
 
 const Root = Router();
 
@@ -14,6 +15,7 @@ Root.use("/api", studentRoutes);
 Root.use("/api", tutorRoutes);
 Root.use("/api/email-config", emailConfigRouter);
 
+Root.use("/api/matching", matchingRouter);
 
 
 export default Root;

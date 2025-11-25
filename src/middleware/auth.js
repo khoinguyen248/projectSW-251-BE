@@ -15,7 +15,7 @@ export function requireAuth(req, res, next) {
   }
 }
 
-// CSRF double-submit: compare header với cookie 'csrf'
+// CSRF double-submit
 export function requireCsrf(req, res, next) {
   const method = req.method.toUpperCase();
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return next();

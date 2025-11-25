@@ -3,7 +3,34 @@ import TutorProfile from "../model/tutor.js";
 import StudentProfile from "../model/students.js";
 
 export async function updateProfile(req, res) {
-  const { fullName, subjectSpecialty, experienceYears, bio, hourlyRate, availability, grade, schoolName } = req.body || {};
+  const { 
+    fullName, 
+    // Tutor fields
+    subjectSpecialty, 
+    experienceYears, 
+    bio, 
+    hourlyRate, 
+    availability,
+    // NEW Tutor fields for AI Matching
+    teachingStyle,
+    expertiseLevel,
+    studentLevelPreference,
+    maxStudents,
+    certification,
+    educationBackground,
+    // Student fields
+    grade, 
+    schoolName,
+    // NEW Student fields for AI Matching
+    learningGoals,
+    preferredSubjects,
+    studentAvailability,
+    learningStyle,
+    academicLevel,
+    preferredPriceRange,
+    goals
+  } = req.body || {};
+  
   const userId = req.user.sub;
   const userRole = req.user.role;
 
@@ -18,7 +45,14 @@ export async function updateProfile(req, res) {
           experienceYears,
           bio,
           hourlyRate,
-          availability: availability || []
+          availability: availability || [],
+          // NEW fields
+          teachingStyle: teachingStyle || "structured",
+          expertiseLevel: expertiseLevel || {},
+          studentLevelPreference: studentLevelPreference || [],
+          maxStudents: maxStudents || 5,
+          certification: certification || [],
+          educationBackground: educationBackground || ""
         },
         { upsert: true, new: true }
       );
@@ -29,7 +63,14 @@ export async function updateProfile(req, res) {
           fullName,
           grade,
           schoolName,
-          // Giữ nguyên các trường khác nếu không gửi lên
+          // NEW fields
+          learningGoals: learningGoals || [],
+          preferredSubjects: preferredSubjects || [],
+          studentAvailability: studentAvailability || [],
+          learningStyle: learningStyle || "visual",
+          academicLevel: academicLevel || "intermediate",
+          preferredPriceRange: preferredPriceRange || { min: 0, max: 500000 },
+          goals: goals || ""
         },
         { upsert: true, new: true }
       );

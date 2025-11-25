@@ -4,7 +4,7 @@ import feedback from "../model/feedback.js";
 import programRegistration from "../model/programRegistration.js";
 import TutorProfile from "../model/tutor.js";
 import Session from "../model/session.js";
-
+import Feedback from "../model/feedback.js";
 
 // GET /tutors
 export async function listTutors(req, res) {
@@ -193,4 +193,120 @@ export async function addFeedback(req, res) {
     comment: comment || "",
   });
   return res.status(201).json({ message: "Feedback submitted" });
+}
+export async function getStudentSessions(req, res) {
+  try {
+    const studentId = req.user.sub;
+    const { status } = req.query;
+
+    let query = { studentId };
+    
+    // Filter by status
+    if (status === "upcoming") {
+      query.status = { $in: ["PENDING", "ACCEPTED"] };
+      query.startTime = { $gt: new Date() };
+    } else if (status === "completed") {
+      query.status = "DONE";
+    } else if (status === "pending") {
+      query.status = "PENDING";
+    }
+
+    const sessions = await Session.find(query)
+      .populate("tutorId", "fullName")
+      .sort({ startTime: 1 })
+      .lean();
+
+    // Transform data for frontend
+    const transformedSessions = sessions.map(session => ({
+      _id: session._id,
+      subject: session.subject,
+      startTime: session.startTime,
+      endTime: session.endTime,
+      status: session.status,
+      meetingLink: session.meetingLink,
+      tutorName: session.tutorId?.fullName,
+      hasFeedback: false // We'll check this next
+    }));
+
+    // Check which sessions have feedback
+    const sessionIds = sessions.map(s => s._id);
+    const existingFeedback = await Feedback.find({ 
+      sessionId: { $in: sessionIds } 
+    }).select('sessionId').lean();
+
+    const feedbackSessionIds = new Set(existingFeedback.map(f => f.sessionId.toString()));
+    
+    transformedSessions.forEach(session => {
+      session.hasFeedback = feedbackSessionIds.has(session._id.toString());
+    });
+
+    res.json({ success: true, sessions: transformedSessions });
+
+  } catch (error) {
+    console.error("Get student sessions error:", error);
+    res.status(500).json({ message: "Failed to load sessions" });
+  }
+}
+
+export async function cancelStudentSession(req, res) {
+  try {
+    const { sessionId } = req.params;
+    const studentId = req.user.sub;
+
+    const session = await Session.findOne({ _id: sessionId, studentId });
+    
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    if (session.status !== "PENDING") {
+      return res.status(400).json({ message: "Only pending sessions can be cancelled" });
+    }
+
+    // Check if session is at least 2 hours away
+    const timeUntilSession = new Date(session.startTime) - new Date();
+    if (timeUntilSession < 2 * 60 * 60 * 1000) {
+      return res.status(400).json({ message: "Sessions can only be cancelled 2 hours before start time" });
+    }
+
+    session.status = "CANCELLED";
+    await session.save();
+
+    res.json({ success: true, message: "Session cancelled successfully" });
+
+  } catch (error) {
+    console.error("Cancel session error:", error);
+    res.status(500).json({ message: "Failed to cancel session" });
+  }
+}
+
+export async function getSessionHistory(req, res) {
+  try {
+    const studentId = req.user.sub;
+    const { page = 1, limit = 10 } = req.query;
+
+    const sessions = await Session.find({ 
+      studentId, 
+      status: "DONE" 
+    })
+      .populate("tutorId", "fullName subjectSpecialty")
+      .sort({ startTime: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    const total = await Session.countDocuments({ studentId, status: "DONE" });
+
+    res.json({
+      success: true,
+      sessions,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total
+    });
+
+  } catch (error) {
+    console.error("Get session history error:", error);
+    res.status(500).json({ message: "Failed to load session history" });
+  }
 }
