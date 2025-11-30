@@ -8,6 +8,9 @@ import {
   scheduleSession,
   joinSession,
   addFeedback,
+  getStudentSessions,
+  cancelStudentSession,
+  getSessionHistory
 } from "../controller/student.controller.js";
 
 const studentRoutes = Router();
@@ -18,5 +21,7 @@ studentRoutes.post("/program/register", requireAuth, requireRole("STUDENT"), reg
 studentRoutes.post("/sessions", requireAuth, requireRole("STUDENT"), scheduleSession);
 studentRoutes.get("/sessions/:id/join", requireAuth, requireRole("STUDENT", "TUTOR"), joinSession);
 studentRoutes.post("/feedback", requireAuth, requireRole("STUDENT"), addFeedback);
-
+studentRoutes.get("/sessions", requireAuth, requireRole("STUDENT"), getStudentSessions);
+studentRoutes.patch("/sessions/:sessionId/cancel", requireAuth, requireRole("STUDENT"), cancelStudentSession);
+studentRoutes.get("/sessions/history", requireAuth, requireRole("STUDENT"), getSessionHistory);
 export default studentRoutes;

@@ -2,6 +2,8 @@
 
 import Session from "../model/session.js";
 import TutorProfile from "../model/tutor.js";
+import { createNotification } from "../services/notificationService.js";
+
 
 // GET /tutor/sessions/pending
 
@@ -95,13 +97,26 @@ export async function confirmSession(req, res) {
     }
 
     await session.save();
+
     console.log("💾 Session saved with new status:", session.status);
+    const title = action === "ACCEPT" ? "Lịch học được chấp nhận" : "Lịch học bị từ chối";
+    const type = action === "ACCEPT" ? "SUCCESS" : "ERROR";
+    const msg = `Tutor đã ${action === "ACCEPT" ? "đồng ý" : "từ chối"} lịch học môn ${session.subject}.`;
     
+    await createNotification({
+        userId: session.studentId, // ID tài khoản của Student
+        title: title,
+        message: msg,
+        type: type,
+        link: "/student-dashboard",
+        emailContent: `<p>${msg}</p><p>Thời gian: ${new Date(session.startTime).toLocaleString()}</p>`
+    });
+
     return res.json({ 
       message: "Session updated successfully", 
       status: session.status 
     });
-
+    
   } catch (error) {
     console.error("❌ Error in confirmSession:", error);
     return res.status(500).json({ message: "Server error" });

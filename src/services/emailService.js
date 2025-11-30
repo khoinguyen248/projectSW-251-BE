@@ -101,3 +101,38 @@ export async function sendVerificationEmail(email, token, userId) {
     return true;
   }
 }
+
+export async function sendEmail({ to, subject, html }) {
+  try {
+    const config = await getEmailConfig();
+    
+    if (config) {
+      const transporter = nodemailer.createTransport({
+        service: config.service,
+        auth: { user: config.email, pass: config.appPassword },
+      });
+
+      await transporter.sendMail({
+        from: `"Tutor System" <${config.email}>`,
+        to,
+        subject,
+        html,
+      });
+
+      // Update usage
+      await emailconfig.findByIdAndUpdate(config._id, { $inc: { usedToday: 1 } });
+      console.log(`✅ Email sent to ${to}`);
+      return true;
+    } 
+    
+    // Fallback log nếu chưa cấu hình email thật
+    console.log('🎯 [DEV - Email Simulation]');
+    console.log(`   To: ${to}`);
+    console.log(`   Subject: ${subject}`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Send email failed:', error.message);
+    return false;
+  }
+}
