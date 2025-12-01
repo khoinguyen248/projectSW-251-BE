@@ -17,7 +17,9 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:3000',
-  'https://project-sw-251-fe-54dd.vercel.app/'
+  'https://project-sw-251-fe-54dd.vercel.app',
+  'https://project-sw-251-fe-54dd-hpgrdrk82-khoinguyens-projects-f31cae95.vercel.app'
+
 ];
 
 app.use(cors({
