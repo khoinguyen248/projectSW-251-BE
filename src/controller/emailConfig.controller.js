@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import emailconfig from "../model/emailconfig.js";
 
 // Biến cứng cấu hình email
