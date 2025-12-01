@@ -19,19 +19,38 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:3000',
   'https://project-sw-251-fe-54dd.vercel.app',
   'https://project-sw-251-fe-54dd-hpgrdrk82-khoinguyens-projects-f31cae95.vercel.app'
-
 ];
 
+// Log CORS errors for debugging
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log('Request Origin:', origin);
+  console.log('Request Path:', req.path);
+  next();
+});
+
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
+      console.error('CORS blocked for origin:', origin);
+      console.error('Allowed origins:', ALLOWED_ORIGINS);
       callback(new Error('CORS not allowed'), false);
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use(express.json());
 app.use(cookieParser());
@@ -62,6 +81,12 @@ app.use(errorHandler);
 
 // ❌ KHÔNG app.listen()
 // Vercel sẽ tự wrap app thành server
-app.listen(process.env.PORT || 8080, () => {
-  console.log('Server is running on port', process.env.PORT || 8080);
-});
+const PORT = process.env.PORT || 8080;
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
+  });
+}
+
+export default app;
