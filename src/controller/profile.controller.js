@@ -1,6 +1,7 @@
 import Account from "../model/account.js";
 import TutorProfile from "../model/tutor.js";
 import StudentProfile from "../model/students.js";
+import { sanitizeFullName } from "../libs/nameSanitizer.js";
 
 export async function updateProfile(req, res) {
   const { 
@@ -31,6 +32,8 @@ export async function updateProfile(req, res) {
     goals
   } = req.body || {};
   
+  const cleanedName = sanitizeFullName(fullName);
+  
   const userId = req.user.sub;
   const userRole = req.user.role;
 
@@ -40,7 +43,7 @@ export async function updateProfile(req, res) {
       await TutorProfile.findOneAndUpdate(
         { accountId: userId },
         { 
-          fullName,
+          fullName: cleanedName,
           subjectSpecialty: subjectSpecialty || [],
           experienceYears,
           bio,
@@ -60,7 +63,7 @@ export async function updateProfile(req, res) {
       await StudentProfile.findOneAndUpdate(
         { accountId: userId },
         { 
-          fullName,
+          fullName: cleanedName,
           grade,
           schoolName,
           // NEW fields
