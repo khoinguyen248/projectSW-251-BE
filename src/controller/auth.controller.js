@@ -96,38 +96,35 @@ function setRefreshCookie(res, token) {
     24 * 60 * 60 * 1000;
     
   res.cookie("rt", token, {
-    httpOnly: true,
-    secure: NODE_ENV === "production",
-    sameSite: "lax",
-    domain: COOKIE_DOMAIN || undefined,
-    path: "/", // ← Sửa thành "/" để có thể gửi đến tất cả routes
-    maxAge: maxAgeMs
-  });
+  httpOnly: true,
+  secure: true,            // bắt buộc
+  sameSite: "none",        // cho phép cookie gửi cross-site
+  path: "/",
+  maxAge: maxAgeMs
+});
 }
 
 
 function clearRefreshCookie(res) {
-  res.clearCookie("rt", {
-    httpOnly: true,
-    secure: NODE_ENV === "production",
-    sameSite: "lax",
-    domain: COOKIE_DOMAIN || undefined,
-    path: "/" // ← Sửa thành "/"
-  });
+ res.clearCookie("rt", {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  path: "/"
+});
 }
 
 const authController = {
   // ─────────────────────────────────────────────
   async csrfMethod(req, res) {
     const token = randomId();
-    res.cookie("csrf", token, {
-      httpOnly: false,
-      secure: NODE_ENV === "production",
-      sameSite: "lax",
-      domain: COOKIE_DOMAIN || undefined,
-      path: "/",
-      maxAge: 24 * 60 * 60 * 1000
-    });
+  res.cookie("csrf", token, {
+  httpOnly: false,
+  secure: true,
+  sameSite: "none",
+  path: "/",
+  maxAge: 24 * 60 * 60 * 1000
+});
     return res.json({ csrfToken: token });
   },
 
