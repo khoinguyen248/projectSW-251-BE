@@ -1,10 +1,10 @@
 import nodemailer from 'nodemailer';
-import emailconfig from '../model/emailconfig.js';
+import emailconfigs from '../model/emailconfig.js';
 
 // Lấy email config từ database
 async function getEmailConfig() {
   try {
-    const config = await emailconfig.findOne({ isActive: true });
+    const config = await emailconfigs.findOne({ isActive: true });
     
     if (!config) {
       throw new Error('No active email configuration found');
@@ -72,7 +72,7 @@ export async function sendVerificationEmail(email, token, userId) {
       });
 
       // Update usage counter
-      await emailconfig.findByIdAndUpdate(config._id, {
+      await emailconfigs.findByIdAndUpdate(config._id, {
         $inc: { usedToday: 1 }
       });
 
@@ -120,7 +120,7 @@ export async function sendEmail({ to, subject, html }) {
       });
 
       // Update usage
-      await emailconfig.findByIdAndUpdate(config._id, { $inc: { usedToday: 1 } });
+      await emailconfigs.findByIdAndUpdate(config._id, { $inc: { usedToday: 1 } });
       console.log(`✅ Email sent to ${to}`);
       return true;
     } 

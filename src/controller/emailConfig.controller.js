@@ -1,4 +1,4 @@
-import emailconfig from "../model/emailconfig.js";
+import emailconfigs from "../model/emailconfig.js";
 
 // Biến cứng cấu hình email
 const HARDCODED_EMAIL_CONFIG = {
@@ -19,10 +19,10 @@ export async function setupEmailConfig(req, res) {
     }
 
     // Deactivate all other configs
-    await emailconfig.updateMany({}, { isActive: false });
+    await emailconfigs.updateMany({}, { isActive: false });
 
     // Create new config
-    const emailConfig = await emailconfig.create({
+    const emailConfig = await emailconfigs.create({
       service,
       email,
       appPassword,
@@ -33,7 +33,7 @@ export async function setupEmailConfig(req, res) {
     const testResult = await testEmailConnection(emailConfig);
     
     if (!testResult.success) {
-      await emailconfig.findByIdAndDelete(emailConfig._id);
+      await emailconfigs.findByIdAndDelete(emailConfig._id);
       return res.status(400).json({ 
         message: "Email configuration failed: " + testResult.error 
       });
@@ -66,7 +66,7 @@ export async function setupEmailConfig(req, res) {
 
 export async function getEmailConfig(req, res) {
   try {
-    const config = await emailconfig.findOne({ isActive: true })
+    const config = await emailconfigs.findOne({ isActive: true })
       .select('email service isActive usedToday dailyLimit');
     
     if (!config) {
@@ -87,7 +87,7 @@ export async function updateEmailConfig(req, res) {
     const { id } = req.params;
     const { email, appPassword, service, dailyLimit } = req.body;
 
-    const config = await emailconfig.findById(id);
+    const config = await emailconfigs.findById(id);
     if (!config) {
       return res.status(404).json({ message: "Config not found" });
     }
@@ -98,7 +98,7 @@ export async function updateEmailConfig(req, res) {
     if (service) updates.service = service;
     if (dailyLimit) updates.dailyLimit = dailyLimit;
 
-    const updatedConfig = await emailconfig.findByIdAndUpdate(
+    const updatedConfig = await emailconfigs.findByIdAndUpdate(
       id, 
       updates, 
       { new: true }

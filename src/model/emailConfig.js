@@ -44,4 +44,4 @@ emailConfigSchema.methods.checkAndResetDailyLimit = function() {
   return Promise.resolve(this);
 };
 
-export default mongoose.model("EmailConfig", emailConfigSchema);
+export default mongoose.model("emailconfigs", emailConfigSchema);
