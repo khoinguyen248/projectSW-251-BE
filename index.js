@@ -16,7 +16,8 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
-  'http://127.0.0.1:3000'
+  'http://127.0.0.1:3000',
+  'https://project-sw-251-fe-54dd.vercel.app/'
 ];
 
 app.use(cors({
@@ -59,4 +60,6 @@ app.use(errorHandler);
 
 // ❌ KHÔNG app.listen()
 // Vercel sẽ tự wrap app thành server
-export default app;
+app.listen(process.env.PORT || 8080, () => {
+  console.log('Server is running on port', process.env.PORT || 8080);
+});
