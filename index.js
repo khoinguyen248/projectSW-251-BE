@@ -5,11 +5,11 @@ import cookieParser from 'cookie-parser';
 
 import connectData from './src/database/index.js';
 import Root from './src/routes/index.js';
-import { notFound, errorHandler } from './src/middleware/errors.js'; // ← Thêm import
-import studentRoutes from './src/routes/student.routes.js';
+import { notFound, errorHandler } from './src/middleware/errors.js';
 
 const app = express();
 
+// --- CORS ---
 const ALLOWED_ORIGINS = [
   'http://localhost:5173', 
   'http://localhost:5174', 
@@ -20,25 +20,26 @@ const ALLOWED_ORIGINS = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-      return callback(null, true);
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed'), false);
     }
-    console.log('CORS blocked for origin:', origin);
-    return callback(new Error('CORS not allowed for this origin'), false);
   },
-  credentials: true,
-  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Authorization', 'Accept'],
+  credentials: true
 }));
 
 app.use(express.json());
 app.use(cookieParser());
 
+// --- CONNECT DATABASE ---
 connectData();
 
+// --- ROUTES ---
 app.use(Root);
-// Thêm vào file index.js backend (tạm thời)
+
+// Debug route (optional)
 app.get('/debug-routes', (req, res) => {
   const routes = [];
   app._router.stack.forEach(middleware => {
@@ -47,23 +48,15 @@ app.get('/debug-routes', (req, res) => {
         path: middleware.route.path,
         methods: Object.keys(middleware.route.methods)
       });
-    } else if (middleware.name === 'router') {
-      middleware.handle.stack.forEach(handler => {
-        if (handler.route) {
-          routes.push({
-            path: handler.route.path,
-            methods: Object.keys(handler.route.methods)
-          });
-        }
-      });
     }
   });
   res.json(routes);
 });
-// ✅ Thêm error handlers
+
+// --- ERROR HANDLERS ---
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(process.env.PORT || 8080, () => {
-  console.log('Server is running on port', process.env.PORT || 8080);
-});
+// ❌ KHÔNG app.listen()
+// Vercel sẽ tự wrap app thành server
+export default app;
