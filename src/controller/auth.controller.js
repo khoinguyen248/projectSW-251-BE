@@ -10,86 +10,90 @@ import verificationToken from "../model/verificationToken.js";
 import { sendVerificationEmail } from "../services/emailService.js";
 
 const { REFRESH_EXPIRES, COOKIE_DOMAIN, NODE_ENV } = process.env;
-function validateUsername(email) {
-  if (!email || typeof email !== 'string') {
+
+// ----------------- Validation helpers -----------------
+/**
+ * Validate username (local-part before @ if email provided)
+ * Rules:
+ * - Required string
+ * - min 3 chars, max 22 chars
+ * - allowed chars: letters, numbers, dot, underscore, hyphen
+ * - no more than 3 repeating same char consecutively
+ * - no spaces
+ */
+function validateUsername(input) {
+  if (!input || typeof input !== "string") {
     return { valid: false, error: "Tên đăng nhập không được bỏ trống" };
   }
 
-  email = email.trim();
-  if (!email) {
-    return { valid: false, error: "Tên đăng nhập không được bỏ trống" };
-  }
+  const email = input.trim();
+  const local = email.includes("@") ? email.split("@")[0] : email;
+  const username = local;
 
-  const emailPart = email.split('@')[0];
-  
-  if (emailPart.length < 3) {
+  if (username.length < 3) {
     return { valid: false, error: "Tên đăng nhập phải có ít nhất 3 ký tự" };
   }
-
-  if (emailPart.length > 22) {
+  if (username.length > 22) {
     return { valid: false, error: "Tên đăng nhập không được vượt quá 22 ký tự" };
   }
 
-  const validUsernameRegex = /^[a-zA-Z0-9._-]+$/;
-  if (!validUsernameRegex.test(emailPart)) {
-    return { valid: false, error: "Tên đăng nhập chỉ được chứa chữ cái, số, dấu gạch ngang, dấu gạch chân và dấu chấm" };
-  }
-
-  const repeatingCharPattern = /(.)\1{3,}/;
-  if (repeatingCharPattern.test(emailPart)) {
-    return { valid: false, error: "Tên đăng nhập không được có ký tự lặp lại liên tiếp quá 3 lần" };
-  }
-
-  if (email.includes(' ')) {
+  if (username.includes(" ")) {
     return { valid: false, error: "Tên đăng nhập không được chứa dấu cách" };
   }
 
+  const validUsernameRegex = /^[a-zA-Z0-9._-]+$/;
+  if (!validUsernameRegex.test(username)) {
+    return { valid: false, error: "Tên đăng nhập chỉ được chứa chữ cái, số, ., _ và -" };
+  }
+
+  // disallow 4 or more repeating chars (e.g. "aaaa")
+  const repeatingCharPattern = /(.)\1{3,}/;
+  if (repeatingCharPattern.test(username)) {
+    return { valid: false, error: "Tên đăng nhập không được có ký tự lặp lại liên tiếp quá 3 lần" };
+  }
+
   return { valid: true, error: null };
 }
 
 /**
- * Kiểm tra mật khẩu
- * Yêu cầu:
- * - Không được bỏ trống
- * - Ít nhất 6 ký tự
- * - Tối đa 32 ký tự
- * - Không chấp nhận khoảng cách (dấu cách)
+ * Validate password
+ * Rules:
+ * - Required string
+ * - min 6 chars, max 32 chars
+ * - no spaces allowed
  */
 function validatePassword(password) {
-  if (!password || typeof password !== 'string') {
+  if (!password || typeof password !== "string") {
     return { valid: false, error: "Mật khẩu không được bỏ trống" };
   }
-
   if (password.length < 6) {
     return { valid: false, error: "Mật khẩu phải có ít nhất 6 ký tự" };
   }
-
   if (password.length > 32) {
     return { valid: false, error: "Mật khẩu không được vượt quá 32 ký tự" };
   }
-
-  if (password.includes(' ')) {
+  if (password.includes(" ")) {
     return { valid: false, error: "Mật khẩu không được chứa khoảng cách" };
   }
-
   return { valid: true, error: null };
 }
 
 /**
- * Kiểm tra email hợp lệ
+ * Validate email format
  */
 function validateEmail(email) {
-  if (!email || typeof email !== 'string') {
+  if (!email || typeof email !== "string") {
     return { valid: false, error: "Email không được bỏ trống" };
   }
-
+  const e = email.trim();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!emailRegex.test(e)) {
     return { valid: false, error: "Email không hợp lệ" };
   }
-
   return { valid: true, error: null };
 }
+// -------------------------------------------------------
+
 function setRefreshCookie(res, token) {
   const maxAgeMs =
     (REFRESH_EXPIRES?.endsWith("d") ? parseInt(REFRESH_EXPIRES) : 30) *
@@ -133,7 +137,7 @@ async signupMethod(req, res) {
     try {
       const { email, password, role } = req.body || {};
       
-      // Validate input
+      // Validate input basic presence
       if (!email || !password || !role) {
         return res.status(400).json({ message: "Email, password and role are required" });
       }
@@ -141,22 +145,24 @@ async signupMethod(req, res) {
       if (!["TUTOR", "STUDENT"].includes(role)) {
         return res.status(400).json({ message: "Role must be TUTOR or STUDENT" });
       }
+
+      // ---- New: validate username (local part), email and password ----
       const usernameValidation = validateUsername(email);
       if (!usernameValidation.valid) {
         return res.status(400).json({ message: usernameValidation.error });
       }
 
-      // ✅ Validate email format
       const emailValidation = validateEmail(email);
       if (!emailValidation.valid) {
         return res.status(400).json({ message: emailValidation.error });
       }
 
-      // ✅ Validate mật khẩu
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.valid) {
         return res.status(400).json({ message: passwordValidation.error });
       }
+      // ----------------------------------------------------------------
+
       // Check if email already exists
       const exists = await Account.findOne({ email });
       if (exists) {
