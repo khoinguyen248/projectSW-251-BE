@@ -50,7 +50,13 @@ app.use(cors({
 }));
 
 // Handle preflight requests
-app.options('*', cors());
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
 
 app.use(express.json());
 app.use(cookieParser());
@@ -59,7 +65,7 @@ app.use(cookieParser());
 connectData();
 
 // --- ROUTES ---
-app.use(Root);
+app.use('/', Root);
 
 // Debug route (optional)
 app.get('/debug-routes', (req, res) => {
@@ -70,23 +76,46 @@ app.get('/debug-routes', (req, res) => {
         path: middleware.route.path,
         methods: Object.keys(middleware.route.methods)
       });
+    } else if (middleware.name === 'router') {
+      // Handle mounted routers
+      middleware.handle.stack.forEach(handler => {
+        if (handler.route) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
     }
   });
   res.json(routes);
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    service: 'backend-api'
+  });
 });
 
 // --- ERROR HANDLERS ---
 app.use(notFound);
 app.use(errorHandler);
 
-// ❌ KHÔNG app.listen()
-// Vercel sẽ tự wrap app thành server
+// ❌ KHÔNG app.listen() - Vercel sẽ tự wrap app thành server
+// Chỉ start server khi chạy local
 const PORT = process.env.PORT || 8080;
-if (process.env.NODE_ENV !== 'production') {
+
+// Export cho Vercel Serverless Functions
+export default app;
+
+// Start server chỉ khi chạy local (không phải trên Vercel)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
   });
 }
-
-export default app;
